@@ -1,19 +1,77 @@
 
-# 📱 Proyecto ConnectaTel - Análisis de Telecomunicaciones
+# 📱 ConnectaTel: Segmentación de Clientes y Patrones de Uso (Telecom LATAM)
 
-nálisis completo del comportamiento de uso de servicios móviles (llamadas y mensajes) para **ConnectaTel**, empresa de telecomunicaciones con operaciones en México y Colombia.
+Análisis del comportamiento real de uso (llamadas y mensajes) de 4,000 clientes de una empresa de telecomunicaciones con operación en México y Colombia, con el objetivo de identificar segmentos de valor y detectar comportamientos atípicos que informen la oferta comercial.
 
-El proyecto integra tres fuentes de datos para identificar patrones de uso, detectar comportamientos atípicos, segmentar clientes y proporcionar recomendaciones comerciales accionables que optimicen la oferta de planes y mejoren la experiencia del usuario.
+## 🎯 Contexto de negocio
 
-## 🎯 Objetivos del Proyecto
+ConnectaTel necesitaba entender qué segmentos de clientes muestran mayor o menor uso de llamadas y mensajes, qué usuarios presentan comportamientos inusuales, y cómo varía el consumo según edad y tipo de plan — para optimizar la oferta y mejorar la retención.
 
-- ✅ Integrar y limpiar bases de datos provenientes de tres fuentes distintas
-- ✅ Aplicar técnicas de validación y detección de valores inconsistentes
-- ✅ Construir un perfil estadístico del uso por cliente y segmentos demográficos
-- ✅ Detectar outliers y comportamientos atípicos mediante métodos estadísticos
-- ✅ Crear segmentaciones basadas en edad, país y comportamiento de uso
-- ✅ Visualizar diferencias entre segmentos y extraer insights comerciales
-- ✅ Documentar el proceso completo en Jupyter Notebook reproducible
+## 🧱 Fuentes de datos
+
+- **`plans.csv`** — catálogo de 2 planes (Básico, Premium) con precios y beneficios incluidos.
+- **`users_latam.csv`** — 4,000 clientes (edad, ciudad, fecha de registro, plan, fecha de baja).
+- **`usage.csv`** — 40,000 registros de actividad real (llamadas con duración, mensajes con longitud).
+
+## 🧹 Metodología de limpieza
+
+**1. Detección de valores sentinel:** `age` contenía el valor `-999` como marcador de dato faltante (no un error real), y `city` usaba `"?"` con el mismo propósito. Ambos se reemplazaron: `-999` por la mediana de edad, `"?"` por `NaN` explícito — evitando que un sentinel numérico distorsionara las estadísticas descriptivas (la media de edad pasaba de coherente a negativa antes de la corrección).
+
+**2. Validación temporal:** se detectaron registros de `reg_date` con año 2026 — inconsistentes con el período operativo del análisis (hasta 2024). Se marcaron como `NaT` en vez de eliminarse, preservando el resto del registro del cliente.
+
+**3. Análisis MAR (Missing At Random) en `duration` y `length`:** en vez de imputar directamente el 55% de nulos en `duration` y 44% en `length`, se verificó su dependencia de la columna `type` (llamada vs. mensaje):
+
+```python
+usage.groupby('type')['duration'].apply(lambda x: x.isna().mean() * 100)
+# call:  0.00%   |   text: 99.93%
+```
+
+Confirmado que `duration` es nula en el 99.9% de los mensajes (no aplica esa métrica) y `length` en el 99.9% de las llamadas — los nulos son **informativos**, no errores. Decisión: conservarlos sin imputar, evitando sesgo artificial en el consumo promedio por tipo de servicio.
+
+## 📊 Perfil de usuario y detección de outliers
+
+Se construyó un perfil por cliente (`user_profile`) agregando `usage` a nivel `user_id`: cantidad de mensajes, llamadas y minutos totales.
+
+**Outliers (método IQR)** sobre las 3 métricas de consumo:
+
+| Variable | Límite superior (IQR) | Máximo real | Outliers detectados |
+|---|---|---|---|
+| Mensajes | 11.5 | 17.0 | 46 usuarios |
+| Llamadas | 10.5 | 15.0 | 30 usuarios |
+| Minutos de llamada | 61.9 | 155.7 | 109 usuarios |
+
+**Decisión:** se conservaron todos los outliers. Justificación de negocio: un consumo de 17 mensajes o 155 minutos no es un error de captura, es comportamiento humano plausible — y estos usuarios son candidatos naturales a planes de mayor valor o corporativos, no ruido a eliminar.
+
+## 🎯 Segmentación de clientes
+
+**Por nivel de uso** (según llamadas y mensajes): Bajo uso (45-50% de la base), Uso medio (30-35%), Alto uso / *power users* (15-20%) — el segmento de mayor valor comercial, con mayor probabilidad de exceder los límites del plan contratado y generar ingresos adicionales por excedentes.
+
+**Por edad:** Joven (<30), Adulto (30-59), Adulto Mayor (60+). La distribución de edad es simétrica y **no muestra correlación con el tipo de plan** — Básico y Premium tienen presencia constante en todos los rangos etarios, lo que indica que la segmentación comercial debe basarse en volumen de consumo, no en edad.
+
+## 🔎 Hallazgos accionables
+
+- **Distribución de planes:** 64.9% Básico, 35.1% Premium.
+- **Mensajes y llamadas siguen distribución sesgada a la derecha**, con la mayoría de usuarios en un rango bajo-medio y una cola de usuarios de alto consumo.
+- **Oportunidad de migración detectada:** un número considerable de usuarios del plan Básico realiza un volumen de llamadas similar al de usuarios Premium — sugiere que el valor diferencial de Premium está más en la *duración* de las llamadas que en la cantidad, y son candidatos a upselling.
+- **Segmento "power users" (Alto uso)** es el más valioso: paga más por excedentes o ya está en el plan de mayor precio, contribuyendo desproporcionadamente a los ingresos.
+
+## 📁 Estructura del repositorio
+
+```
+connectatel-segmentacion-clientes/
+├── README.md
+├── notebook/
+│   └── connectatel_analisis.ipynb
+└── visualizaciones/
+    ├── distribucion_edad_por_plan.png
+    ├── distribucion_mensajes_llamadas.png
+    ├── boxplots_outliers.png
+    └── segmentacion_uso_edad.png
+```
+
+## 🛠️ Herramientas
+
+Python — Pandas (limpieza, análisis MAR, `groupby`/`agg`, segmentación con funciones condicionales), NumPy, Seaborn y Matplotlib (histogramas con `hue`, boxplots, countplots).
 
 ## 📁 Estructura del Proyecto
 
@@ -22,61 +80,4 @@ El proyecto integra tres fuentes de datos para identificar patrones de uso, dete
 Haz clic en el siguiente botón:
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ivanbayonaperez-cpu/-Proyecto-ConnectaTel---An-lisis-de-Telecomunicaciones/blob/main/S7_Project_ConnectaTel.ipynb)
-
-O:
-
-1. Abre el archivo `.ipynb` en GitHub
-2. Haz clic en **Open in Colab**
-
-## 📘 Cómo reproducir el análisis
-
-1. Abre `notebooks/everpeak_analysis.ipynb`
-2. Ejecuta las celdas en orden
-3. El notebook carga automáticamente el dataset desde `/data/` o desde un enlace público (según corresponda)
-
-
-   ## 📈 Metodología del Proyecto
-
-### **Fase 1: Exploración y Carga**
-- Carga de 3 datasets (plans, users_latam, usage)
-- Análisis exploratorio inicial (.info(), .head(), .describe())
-
-### **Fase 2: Identificación de Problemas de Calidad**
-- Detección de valores nulos y sentinels (-999, "?")
-- Identificación de inconsistencias temporales
-- Análisis de tipos de datos
-
-### **Fase 3: Limpieza de Datos**
-- Reemplazo de valores sentinel por NaN
-- Imputación de city con "Sin información"
-- Validación de fechas y conversión de tipos
-- Manejo de nulos informativos (churn_date)
-
-### **Fase 4: Análisis Estadístico**
-- Summary statistics (media, mediana, percentiles)
-- Análisis de distribuciones
-- Identificación de valores atípicos
-
-### **Fase 5: Detección de Outliers**
-- Método IQR (Rango Intercuartílico)
-- Método Z-Score (desviaciones estándar)
-- Interpretación de negocio de outliers
-
-### **Fase 6: Segmentación de Clientes**
-- Segmentación por edad (Joven, Adulto, Adulto Mayor)
-- Segmentación por uso (Bajo, Medio, Alto)
-- Análisis cruzado de segmentos
-
-### **Fase 7: Visualización**
-- Histogramas de distribución
-- Boxplots para detección de outliers
-- Countplots de segmentos
-
-### **Fase 8: Insights y Recomendaciones**
-- Identificación de segmentos valiosos
-- Propuestas de nuevos planes
-- Roadmap de acciones prioritarias
-
-
-
 
